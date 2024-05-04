@@ -29,10 +29,19 @@ If you prefer to use Git, which is ideal for receiving updates and contributing 
    ```bash
    cd wsprompt
    ```
+3. (Optional) Modify ~shrc
+   ```bash
+   echo 'export PATH="$PATH:$(pwd)"' >> ~/.zshrc
+   ```
+> [!Note]
+> Change .zshrc to your shell's one.
 
 ### Using wget
 
 For a quick download without cloning the whole repository:
+
+> [!Warning]
+> In this case, you need to manually configure PATH to use wsprompt globally
 
 1. Download the script directly:
    ```bash
