@@ -15,9 +15,9 @@
 
 ## Installation
 
-`wsprompt` can be installed using either `git` or `wget`. Here are the instructions for both methods:
+`wsprompt` can be installed using `git`. Here are the instructions:
 
-### Using Git (Recommanded)
+### Using Git
 
 If you prefer to use Git, which is ideal for receiving updates and contributing to the project:
 
@@ -36,22 +36,6 @@ If you prefer to use Git, which is ideal for receiving updates and contributing 
    ```
 > [!Note]
 > Change .zshrc to your shell's one.
-
-### Using wget
-
-For a quick download without cloning the whole repository:
-
-> [!Warning]
-> In this case, you need to manually configure PATH to use wsprompt globally
-
-1. Download the script directly:
-   ```bash
-   wget https://github.com/hi-jin/wsprompt/raw/main/wsprompt -O wsprompt
-   ```
-2. Make the script executable:
-   ```bash
-   chmod +x wsprompt
-   ```
 
 ## Usage
 
