@@ -2,39 +2,47 @@
 
 # wsprompt script - support for both whitelist and blacklist, with debugging logs
 
+# Color codes
+GREEN='\033[0;32m'
+RED='\033[0;31m'
+YELLOW='\033[0;33m'
+BOLD='\033[1m'
+UNDERLINE='\033[4m'
+NC='\033[0m' # No Color
+
 # Use the current directory if no directory is provided by the user
 DIR=$(realpath ${1:-.})
-echo "Starting wsprompt in directory: $DIR"
+echo -e "${BOLD}${UNDERLINE}Starting wsprompt in directory:${NC} ${YELLOW}$DIR${NC}"
 
 # Read the .wspromptconfig file if it exists
 declare -a WHITELIST
 declare -a BLACKLIST
-HAS_WHITELIST=false
+HAS_ENTRIES_IN_WHITELIST=false
 
 if [[ -e "$DIR/.wspromptconfig" ]]; then
-    echo "Found .wspromptconfig file"
+    echo -e "\n${BOLD}${UNDERLINE}Configuration:${NC}"
+    echo -e "  ${GREEN}Found .wspromptconfig file${NC}"
     MODE="none"
     while IFS= read -r line || [[ -n "$line" ]]; do
         if [[ "$line" == "whitelist:" ]]; then
             MODE="whitelist"
-            echo "Switching to whitelist mode"
-            HAS_WHITELIST=true
+            echo -e "  ${YELLOW}Switching to whitelist mode${NC}"
         elif [[ "$line" == "blacklist:" ]]; then
             MODE="blacklist"
-            echo "Switching to blacklist mode"
+            echo -e "  ${YELLOW}Switching to blacklist mode${NC}"
         elif [[ "$line" =~ ^#.* || -z "$line" ]]; then
             continue
         else
             line="${line%/}"  # Remove trailing slash if any
-            path=$(realpath "$DIR/$line")
             case $MODE in
                 "whitelist")
-                    WHITELIST+=("$path")
-                    echo "Added to whitelist: $path"
+                    WHITELIST+=("$line")
+                    HAS_ENTRIES_IN_WHITELIST=true
+                    echo -e "    ${GREEN}Added to whitelist: $line${NC}"
                     ;;
                 "blacklist")
-                    BLACKLIST+=("$path")
-                    echo "Added to blacklist: $path"
+                    BLACKLIST+=("$line")
+                    echo -e "    ${RED}Added to blacklist: $line${NC}"
                     ;;
             esac
         fi
@@ -43,65 +51,138 @@ fi
 
 # Create a temporary file to store results
 OUTPUT=$(mktemp)
-echo "Temporary file created at: $OUTPUT"
+echo -e "\n${BOLD}${UNDERLINE}Processing:${NC}"
+echo -e "  ${YELLOW}Temporary file created at: $OUTPUT${NC}"
+
+# Initialize counters
+file_count=0
+dir_count=0
+included_count=0
+excluded_count=0
 
 # Initialize the queue
 declare -a queue
-if $HAS_WHITELIST; then
-    queue=("${WHITELIST[@]}")
+if $HAS_ENTRIES_IN_WHITELIST; then
+    for item in "${WHITELIST[@]}"; do
+        queue+=("$DIR/$item")
+    done
 else
     queue=("$DIR")
 fi
 
+# Function to check if a path matches a pattern
+match_pattern() {
+    local path="$1"
+    local pattern="$2"
+
+    # Remove leading ./ from the path and pattern
+    path="${path#./}"
+    pattern="${pattern#./}"
+
+    # Convert the pattern to a regular expression
+    pattern="^${pattern//\*/.*}$"
+
+    # Check if the path matches the pattern
+    [[ "$path" =~ $pattern ]]
+}
+
 # Execute BFS
+declare -a visited
 while [ ${#queue[@]} -gt 0 ]; do
     current="${queue[0]}"
     queue=("${queue[@]:1}")
-    echo "Processing directory: $current"
+    echo -e "  Processing directory: ${YELLOW}$current${NC}"
+
+    # Check if the current directory has already been visited
+    if [[ " ${visited[@]} " =~ " $current " ]]; then
+        continue
+    fi
+    visited+=("$current")
 
     # Traverse directories
-    if [ -d "$current" ] && [[ ! " ${BLACKLIST[@]} " =~ " $current " ]]; then
-        for entry in "$current"/*; do
-            entry_path=$(realpath "$entry")
-            skip=false
+    if [ -d "$current" ]; then
+        dir_count=$((dir_count + 1))
+        while IFS= read -r -d $'\0' entry; do
+            entry_path="${entry#$DIR/}"
+            include_entry=true
+
+            # Check if the entry is hidden
+            if [[ "$(basename "$entry")" =~ ^\. ]]; then
+                if $HAS_ENTRIES_IN_WHITELIST; then
+                    include_entry=false
+                    for pattern in "${WHITELIST[@]}"; do
+                        if match_pattern "$entry_path" "$pattern"; then
+                            include_entry=true
+                            break
+                        fi
+                    done
+                    if ! $include_entry; then
+                        excluded_count=$((excluded_count + 1))
+                        echo -e "    ${RED}Skipping hidden entry not in whitelist: $entry${NC}"
+                    fi
+                else
+                    include_entry=false
+                    excluded_count=$((excluded_count + 1))
+                    echo -e "    ${RED}Skipping hidden entry: $entry${NC}"
+                fi
+            fi
+
+            # Handle whitelist
+            if $HAS_ENTRIES_IN_WHITELIST; then
+                include_entry=false
+                for pattern in "${WHITELIST[@]}"; do
+                    if match_pattern "$entry_path" "$pattern"; then
+                        include_entry=true
+                        break
+                    fi
+                done
+                if ! $include_entry; then
+                    excluded_count=$((excluded_count + 1))
+                    echo -e "    ${RED}Skipping entry not in whitelist: $entry${NC}"
+                fi
+            fi
 
             # Handle blacklist
             for pattern in "${BLACKLIST[@]}"; do
-                if [[ "$entry_path" == "$pattern" ]]; then
-                    skip=true
-                    echo "Skipping $entry due to blacklist match: $pattern"
+                if match_pattern "$entry_path" "$pattern"; then
+                    include_entry=false
+                    excluded_count=$((excluded_count + 1))
+                    echo -e "    ${RED}Skipping entry due to blacklist match: $entry (Pattern: $pattern)${NC}"
                     break
                 fi
             done
 
-            if $skip; then
-                continue
+            if $include_entry; then
+                if [ -d "$entry" ]; then
+                    queue+=("$entry")
+                elif [ -f "$entry" ]; then
+                    file_count=$((file_count + 1))
+                    included_count=$((included_count + 1))
+                    echo -e "    ${GREEN}Adding file content from: $entry${NC}"
+                    echo "Directory/File: $entry" >> $OUTPUT
+                    cat "$entry" >> $OUTPUT
+                    echo "" >> $OUTPUT
+                fi
             fi
-
-            if [ -d "$entry" ]; then
-                queue+=("$entry_path")
-            elif [ -f "$entry" ]; then
-                # Add file content
-                echo "Adding file content from: $entry"
-                echo "Directory/File: $entry" >> $OUTPUT
-                cat "$entry" >> $OUTPUT
-                echo "" >> $OUTPUT
-            fi
-        done
+        done < <(find "$current" -maxdepth 1 -print0)
     fi
 done
+
+echo -e "\n${BOLD}${UNDERLINE}Results:${NC}"
+echo -e "  ${GREEN}Processed $file_count files and $dir_count directories${NC}"
+echo -e "  ${GREEN}Included $included_count files/directories${NC}"
+echo -e "  ${RED}Excluded $excluded_count files/directories${NC}"
 
 # Determine the clipboard command based on the platform
 if [[ "$(uname)" == "Darwin" ]]; then
     cat $OUTPUT | pbcopy
-    echo "Content copied to clipboard using pbcopy"
+    echo -e "  ${GREEN}Content copied to clipboard using pbcopy${NC}"
 else
     cat $OUTPUT | xclip -selection clipboard
-    echo "Content copied to clipboard using xclip"
+    echo -e "  ${GREEN}Content copied to clipboard using xclip${NC}"
 fi
 
 # Delete the temporary file
 rm $OUTPUT
 
-echo "Workspace prompt is copied to clipboard."
-
+echo -e "\n${BOLD}${GREEN}Workspace prompt is copied to clipboard.${NC}"
