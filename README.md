@@ -29,9 +29,10 @@ If you prefer to use Git, which is ideal for receiving updates and contributing 
    ```bash
    cd wsprompt
    ```
-3. (Optional) Modify ~shrc
+3. (Optional) Register PATH
    ```bash
    echo "export PATH=\"\$PATH:$(pwd)\"" >> ~/.zshrc
+   source ~/.zshrc
    ```
 > [!Note]
 > Change .zshrc to your shell's one.
