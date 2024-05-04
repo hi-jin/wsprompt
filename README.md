@@ -17,7 +17,7 @@
 
 `wsprompt` can be installed using either `git` or `wget`. Here are the instructions for both methods:
 
-### Using Git
+### Using Git (Recommanded)
 
 If you prefer to use Git, which is ideal for receiving updates and contributing to the project:
 
