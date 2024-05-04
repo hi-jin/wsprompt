@@ -1,0 +1,107 @@
+#!/bin/bash
+
+# wsprompt script - support for both whitelist and blacklist, with debugging logs
+
+# Use the current directory if no directory is provided by the user
+DIR=$(realpath ${1:-.})
+echo "Starting wsprompt in directory: $DIR"
+
+# Read the .wspromptconfig file if it exists
+declare -a WHITELIST
+declare -a BLACKLIST
+HAS_WHITELIST=false
+
+if [[ -e "$DIR/.wspromptconfig" ]]; then
+    echo "Found .wspromptconfig file"
+    MODE="none"
+    while IFS= read -r line || [[ -n "$line" ]]; do
+        if [[ "$line" == "whitelist:" ]]; then
+            MODE="whitelist"
+            echo "Switching to whitelist mode"
+            HAS_WHITELIST=true
+        elif [[ "$line" == "blacklist:" ]]; then
+            MODE="blacklist"
+            echo "Switching to blacklist mode"
+        elif [[ "$line" =~ ^#.* || -z "$line" ]]; then
+            continue
+        else
+            line="${line%/}"  # Remove trailing slash if any
+            path=$(realpath "$DIR/$line")
+            case $MODE in
+                "whitelist")
+                    WHITELIST+=("$path")
+                    echo "Added to whitelist: $path"
+                    ;;
+                "blacklist")
+                    BLACKLIST+=("$path")
+                    echo "Added to blacklist: $path"
+                    ;;
+            esac
+        fi
+    done < "$DIR/.wspromptconfig"
+fi
+
+# Create a temporary file to store results
+OUTPUT=$(mktemp)
+echo "Temporary file created at: $OUTPUT"
+
+# Initialize the queue
+declare -a queue
+if $HAS_WHITELIST; then
+    queue=("${WHITELIST[@]}")
+else
+    queue=("$DIR")
+fi
+
+# Execute BFS
+while [ ${#queue[@]} -gt 0 ]; do
+    current="${queue[0]}"
+    queue=("${queue[@]:1}")
+    echo "Processing directory: $current"
+
+    # Traverse directories
+    if [ -d "$current" ] && [[ ! " ${BLACKLIST[@]} " =~ " $current " ]]; then
+        for entry in "$current"/*; do
+            entry_path=$(realpath "$entry")
+            skip=false
+
+            # Handle blacklist
+            for pattern in "${BLACKLIST[@]}"; do
+                if [[ "$entry_path" == "$pattern" ]]; then
+                    skip=true
+                    echo "Skipping $entry due to blacklist match: $pattern"
+                    break
+                fi
+            done
+
+            if $skip; then
+                continue
+            fi
+
+            if [ -d "$entry" ]; then
+                queue+=("$entry_path")
+            elif [ -f "$entry" ]; then
+                # Add file content
+                echo "Adding file content from: $entry"
+                echo "Directory/File: $entry" >> $OUTPUT
+                cat "$entry" >> $OUTPUT
+                echo "" >> $OUTPUT
+            fi
+        done
+    fi
+done
+
+# Determine the clipboard command based on the platform
+if [[ "$(uname)" == "Darwin" ]]; then
+    cat $OUTPUT | pbcopy
+    echo "Content copied to clipboard using pbcopy"
+else
+    cat $OUTPUT | xclip -selection clipboard
+    echo "Content copied to clipboard using xclip"
+fi
+
+# Delete the temporary file
+rm $OUTPUT
+
+echo "Workspace prompt is copied to clipboard."
+
