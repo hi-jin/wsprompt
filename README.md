@@ -31,7 +31,7 @@ If you prefer to use Git, which is ideal for receiving updates and contributing 
    ```
 3. (Optional) Modify ~shrc
    ```bash
-   echo 'export PATH="$PATH:$(pwd)"' >> ~/.zshrc
+   echo "export PATH=\"\$PATH:$(pwd)\"" >> ~/.zshrc
    ```
 > [!Note]
 > Change .zshrc to your shell's one.
