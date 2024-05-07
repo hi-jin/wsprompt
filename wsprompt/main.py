@@ -3,7 +3,7 @@ import sys
 import gitmatch
 import clipboard
 
-from utils import (
+from wsprompt.utils import (
     normalize_path,
     get_children,
     is_directory,

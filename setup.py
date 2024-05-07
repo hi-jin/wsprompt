@@ -10,7 +10,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "wsprompt = main:main",
+            "wsprompt = wsprompt.main:main",
         ],
     },
     python_requires=">=3.8",
