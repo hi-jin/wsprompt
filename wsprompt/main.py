@@ -48,6 +48,16 @@ def main():
         else:
             print_matched_message(file_or_directory)
             files_to_be_added.append(file_or_directory)
+    
+    # -----ASK FILE EXPORT-----
+    print("Do you want to export to the file? (or clipboard)")
+    answer = input("use file? [y/N]: ").lower()
+    mode = None
+    if answer == "y":
+        mode = "file"
+    else:
+        mode = "clipboard"
+
 
     # -----Export-----
     output = ""
@@ -55,7 +65,15 @@ def main():
         output += f"-----File: {file}-----\n"
         output += f"Content:\n{read_file(file)}\n"
         output += "\n"
-    clipboard.copy(output)
+    if mode == "file":
+        output_filename = "wsprompt_output.txt"
+        with open(output_filename, "w") as file:
+            file.write(output)
+        print(f"Data exported to {output_filename}")
+    else:
+        clipboard.copy(output)
+        print(f"Data exported to clipboard")
+
     print_result_summary(len(files_to_be_added))
 
 
