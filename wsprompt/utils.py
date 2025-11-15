@@ -31,23 +31,28 @@ def load_ignore_rules(root_dir, ignore_file_path=None):
         elif os.path.exists(git_ignore):
             ignore_path = git_ignore
         else:
-            return lambda _: False  # No ignore rules
+            # No ignore file found.
+            # Return a simple matcher that only ignores the .git directory.
+            git_dir_path = os.path.join(root_dir, ".git")
+
+            def git_only_matcher(path):
+                abs_path = os.path.abspath(path)
+                # Check if the path IS the git dir or is INSIDE the git dir
+                return abs_path == git_dir_path or abs_path.startswith(git_dir_path + os.path.sep)
+
+            return git_only_matcher
 
     if not os.path.exists(ignore_path):
         raise FileNotFoundError(f"Ignore file not found: {ignore_path}")
 
-    # Always add .git to the ignore list
+    # The parser needs the *path* to the file, not its content.
     base_dir = os.path.dirname(ignore_path)
-    custom_rules = "\n.git\n"
-    try:
-        with open(ignore_path, "r", encoding="utf-8") as f:
-            custom_rules += f.read()
-    except Exception:
-        pass  # If file non-existent or unreadable, just use .git rule
 
-    from io import StringIO
-
-    return parse_gitignore(StringIO(custom_rules), base_dir=base_dir)
+    # --- BUG FIX ---
+    # Pass the file PATH (ignore_path) directly to the parser.
+    # The 'parse_gitignore' function will handle opening and reading it.
+    # It also inherently handles ignoring .git as part of standard gitignore behavior.
+    return parse_gitignore(ignore_path, base_dir=base_dir)
 
 
 def discover_files(root_dir, ignore_matcher, include_exts=None, silent=False):
